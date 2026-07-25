@@ -1,0 +1,18 @@
+{
+	"schemaVersion": 1,
+	"id": "controllable-death-penalty-test",
+	"version": "1.0.0",
+	"name": "Controllable Death Penalty Tests",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": [
+			"com.cdp.test.DeathPenaltyGameTest"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "26.1.1",
+		"controllable-death-penalty": "*",
+		"fabric-gametest-api-v1": "*"
+	}
+}
