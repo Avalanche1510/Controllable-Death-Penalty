@@ -3,13 +3,13 @@
 	"id": "controllable-death-penalty",
 	"version": "${version}",
 	"name": "Controllable Death Penalty",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "No more FULL loss of Items, or ALWAYS keep items, or graves! This minecraft mod provides customizable, trade-off settings to preserve your important assets, and AT THE SAME TIME, still reserve acceptable death penalty.",
 	"authors": [
-		"Me!"
+		"Avalanche1510"
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/Avalanche1510/Controllable-Death-Penalty"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/controllable-death-penalty/icon.png",
