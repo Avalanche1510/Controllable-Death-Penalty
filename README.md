@@ -16,6 +16,11 @@
 
 模组逻辑完全由服务端决定；客户端无需安装即可按原版机制看到并拾取掉出的物品和经验球。
 
+已兼容 Traveler's Backpack 11.2.7 的原生已装备背包槽。掉落检查成功后由 Traveler's Backpack 保留其死亡地点自动放置等原生行为；CDP 只处理背包物品本身，不会分别检查背包内部库存。启用 Trinkets 外部装备集成时不适用此兼容。
+
+## 兼容的模组：
+- Traveler's Backpack (旅行者背包)
+
 ## 资源指南
 
 [模组文档](Docs/模组文档.md)<br>
@@ -40,6 +45,11 @@ Instead of choosing between dropping everything and keeping everything, it perfo
 Rules are saved with the world and persist across server restarts. The whitelist can protect any vanilla or modded item. Experience loss is selected from a random percentage of the player's current total experience and is emitted as exactly conserved experience-orb value.
 
 All logic is server-authoritative. Clients do not need the mod and use normal vanilla item and experience-orb behaviour.
+
+The native equipped-backpack slot from Traveler's Backpack 11.2.7 is supported. A successful drop check preserves Traveler's Backpack's native death-site placement behaviour. CDP processes only the backpack item, never its internal inventory; this compatibility does not apply while the external Trinkets equipment integration is enabled.
+
+## Compatible Mods
+- Traveler's Backpack
 
 ## Resource Guide
 

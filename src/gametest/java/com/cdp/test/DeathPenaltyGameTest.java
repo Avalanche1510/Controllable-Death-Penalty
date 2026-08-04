@@ -1,10 +1,14 @@
 package com.cdp.test;
 
 import com.cdp.config.DeathPenaltyConfig;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
@@ -15,16 +19,139 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.lang.reflect.Method;
 
 public final class DeathPenaltyGameTest {
 	@SuppressWarnings("removal")
-	@GameTest(maxTicks = 40)
+	private static void verifyTravelersBackpackNativeSlot(GameTestHelper helper) {
+		if (!FabricLoader.getInstance().isModLoaded("travelersbackpack")) {
+			helper.succeed();
+			return;
+		}
+
+		Item backpackItem = BuiltInRegistries.ITEM.getValue(
+			Identifier.fromNamespaceAndPath("travelersbackpack", "standard")
+		);
+		helper.assertFalse(backpackItem == Items.AIR, "Traveler's Backpack standard item is not registered");
+
+		DeathPenaltyConfig config = DeathPenaltyConfig.get(helper.getLevel().getServer());
+		config.dropChance = 1.0;
+		config.doDurabilityLoss = false;
+		config.minExperienceLossPerc = 0.0;
+		config.maxExperienceLossPerc = 0.0;
+		config.whiteList.clear();
+		config.whiteList.add(Identifier.fromNamespaceAndPath("travelersbackpack", "standard"));
+
+		Component retainedMarker = Component.literal("cdp-travelers-retained-" + UUID.randomUUID());
+		ServerPlayer oldPlayer = makeMockPlayerAtTestSite(helper);
+		ItemStack retainedBackpack = new ItemStack(backpackItem);
+		retainedBackpack.set(DataComponents.CUSTOM_NAME, retainedMarker);
+		equipTravelersBackpack(oldPlayer, retainedBackpack);
+		oldPlayer.setHealth(0.0F);
+		oldPlayer.die(helper.getLevel().damageSources().genericKill());
+
+		helper.runAfterDelay(5, () -> {
+			ServerPlayer respawnedPlayer = helper.getLevel().getServer().getPlayerList().respawn(
+				oldPlayer, false, Entity.RemovalReason.KILLED
+			);
+			helper.runAfterDelay(1, () -> {
+				try {
+					ItemStack restored = getWearingTravelersBackpack(respawnedPlayer);
+					helper.assertTrue(retainedMarker.equals(restored.get(DataComponents.CUSTOM_NAME)),
+						"White-listed equipped backpack was not restored after all attachment callbacks");
+					helper.assertValueEqual(0, findMarkedDrops(helper.getLevel(), retainedMarker).size(),
+						"White-listed equipped backpack unexpectedly dropped");
+				} finally {
+					helper.getLevel().getServer().getPlayerList().remove(respawnedPlayer);
+				}
+
+				verifyTravelersBackpackDropsExactlyOnce(helper, config, backpackItem);
+			});
+		});
+	}
+
+	@SuppressWarnings("removal")
+	private static void verifyTravelersBackpackDropsExactlyOnce(GameTestHelper helper,
+			DeathPenaltyConfig config, Item backpackItem) {
+		config.whiteList.clear();
+		config.dropChance = 1.0;
+		Component droppedMarker = Component.literal("cdp-travelers-dropped-" + UUID.randomUUID());
+		ServerPlayer oldPlayer = makeMockPlayerAtTestSite(helper);
+		ItemStack droppedBackpack = new ItemStack(backpackItem);
+		droppedBackpack.set(DataComponents.CUSTOM_NAME, droppedMarker);
+		equipTravelersBackpack(oldPlayer, droppedBackpack);
+		BlockPos deathPosition = oldPlayer.blockPosition();
+		oldPlayer.setHealth(0.0F);
+		oldPlayer.die(helper.getLevel().damageSources().genericKill());
+
+		helper.runAfterDelay(5, () -> {
+			ServerPlayer respawnedPlayer = helper.getLevel().getServer().getPlayerList().respawn(
+				oldPlayer, false, Entity.RemovalReason.KILLED
+			);
+			try {
+				helper.assertValueEqual(0, findMarkedDrops(helper.getLevel(), droppedMarker).size(),
+					"Traveler's Backpack native placement was bypassed by a custom item drop");
+				helper.assertTrue(findNearbyBlock(helper.getLevel(), deathPosition, Block.byItem(backpackItem)),
+					"Drop-enabled equipped backpack was not placed by Traveler's Backpack's native death handler");
+				helper.assertTrue(getWearingTravelersBackpack(respawnedPlayer).isEmpty(),
+					"Dropped equipped backpack unexpectedly returned after respawn");
+			} finally {
+				helper.getLevel().getServer().getPlayerList().remove(respawnedPlayer);
+				helper.killAllEntitiesOfClass(ItemEntity.class);
+			}
+			helper.succeed();
+		});
+	}
+
+	private static boolean findNearbyBlock(ServerLevel level, BlockPos center, Block expectedBlock) {
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int x = center.getX() - 12; x <= center.getX() + 12; x++) {
+			for (int y = Math.max(level.getMinY(), center.getY() - 12);
+					y <= Math.min(level.getMaxY() - 1, center.getY() + 12); y++) {
+				for (int z = center.getZ() - 12; z <= center.getZ() + 12; z++) {
+					if (level.getBlockState(cursor.set(x, y, z)).is(expectedBlock)) return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static List<? extends ItemEntity> findMarkedDrops(ServerLevel level, Component marker) {
+		return level.getEntities(EntityType.ITEM,
+			entity -> marker.equals(entity.getItem().get(DataComponents.CUSTOM_NAME)));
+	}
+
+	private static void equipTravelersBackpack(ServerPlayer player, ItemStack backpack) {
+		invokeTravelersBackpackApi("equipBackpack", new Class<?>[]{net.minecraft.world.entity.player.Player.class, ItemStack.class},
+			player, backpack);
+	}
+
+	private static ItemStack getWearingTravelersBackpack(ServerPlayer player) {
+		Object result = invokeTravelersBackpackApi("getWearingBackpack",
+			new Class<?>[]{net.minecraft.world.entity.player.Player.class}, player);
+		return result instanceof ItemStack stack ? stack : ItemStack.EMPTY;
+	}
+
+	private static Object invokeTravelersBackpackApi(String methodName, Class<?>[] parameterTypes, Object... arguments) {
+		try {
+			Class<?> attachmentUtils = Class.forName("com.tiviacz.travelersbackpack.attachment.AttachmentUtils");
+			Method method = attachmentUtils.getMethod(methodName, parameterTypes);
+			return method.invoke(null, arguments);
+		} catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException("Traveler's Backpack GameTest API call failed: " + methodName, exception);
+		}
+	}
+
+	@SuppressWarnings("removal")
+	@GameTest(maxTicks = 100)
 	public void protectedArmorAndOffhandSurviveDeathAndRespawn(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		PlayerList playerList = level.getServer().getPlayerList();
@@ -53,7 +180,7 @@ public final class DeathPenaltyGameTest {
 		config.maxExperienceLossPerc = 0.0;
 		config.whiteList.clear();
 
-		ServerPlayer oldPlayer = helper.makeMockServerPlayerInLevel();
+		ServerPlayer oldPlayer = makeMockPlayerAtTestSite(helper);
 		ServerPlayer respawnedPlayer = null;
 		Map<EquipmentSlot, ItemStack> protectedEquipment = new EnumMap<>(EquipmentSlot.class);
 		protectedEquipment.put(EquipmentSlot.FEET, damaged(Items.DIAMOND_BOOTS, 11));
@@ -88,6 +215,13 @@ public final class DeathPenaltyGameTest {
 		ItemStack stack = new ItemStack(item);
 		stack.setDamageValue(damage);
 		return stack;
+	}
+
+	private static ServerPlayer makeMockPlayerAtTestSite(GameTestHelper helper) {
+		ServerPlayer player = helper.makeMockServerPlayerInLevel();
+		Vec3 testPosition = helper.absoluteVec(new Vec3(0.5, 1.0, 0.5));
+		player.setPos(testPosition.x, testPosition.y, testPosition.z);
+		return player;
 	}
 
 	private static void assertProtectedEquipment(GameTestHelper helper, ServerPlayer player,
@@ -134,7 +268,7 @@ public final class DeathPenaltyGameTest {
 			expected.setDamageValue((int) Math.ceil(expected.getMaxDamage() * config.minDurabilityLossPerc));
 		}
 
-		ServerPlayer oldPlayer = helper.makeMockServerPlayerInLevel();
+		ServerPlayer oldPlayer = makeMockPlayerAtTestSite(helper);
 		oldPlayer.setItemSlot(EquipmentSlot.MAINHAND, original.copy());
 		oldPlayer.setHealth(0.0F);
 		oldPlayer.die(level.damageSources().genericKill());
@@ -169,8 +303,11 @@ public final class DeathPenaltyGameTest {
 			}
 
 			int nextIndex = combinationIndex + 1;
-			if (nextIndex < combinations.size()) runCombination(helper, config, combinations, nextIndex);
-			else helper.succeed();
+			if (nextIndex < combinations.size()) {
+				runCombination(helper, config, combinations, nextIndex);
+			} else {
+				verifyTravelersBackpackNativeSlot(helper);
+			}
 		});
 	}
 

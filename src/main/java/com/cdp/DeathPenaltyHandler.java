@@ -2,12 +2,15 @@ package com.cdp;
 
 import com.cdp.config.DeathPenaltyConfig;
 import com.cdp.access.CdpPlayerAccess;
+import com.cdp.compat.TravelersBackpackCompat;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
@@ -23,6 +26,7 @@ public final class DeathPenaltyHandler {
 		EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD, EquipmentSlot.OFFHAND
 	};
 	private static final Map<UUID, RetainedDeathState> RETAINED_DEATH_STATES = new HashMap<>();
+	private static final Map<UUID, ItemStack> RETAINED_TRAVELERS_BACKPACKS = new HashMap<>();
 
 	private DeathPenaltyHandler() { }
 
@@ -31,7 +35,7 @@ public final class DeathPenaltyHandler {
 		((CdpPlayerAccess) player).cdp$destroyVanishingCursedItems();
 		RandomSource random = level.getRandom();
 		for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD}) {
-			processEquipment(player, slot, config.doArmorDrop, config, random);
+			processEquipment(player, level, slot, config.doArmorDrop, config, random);
 		}
 		Inventory inventory = player.getInventory();
 		int selected = inventory.getSelectedSlot();
@@ -40,14 +44,51 @@ public final class DeathPenaltyHandler {
 		// above/below and must never pass through the ordinary inventory rules.
 		for (int slot = 0; slot < inventory.getNonEquipmentItems().size(); slot++) {
 			boolean allowed = slot == selected ? config.doMainhandDrop : (!Inventory.isHotbarSlot(slot) || config.doToolbarDrop);
-			processInventory(player, inventory, slot, allowed, config, random);
+			processInventory(player, level, inventory, slot, allowed, config, random);
 		}
-		processEquipment(player, EquipmentSlot.OFFHAND, config.doOffhandDrop, config, random);
+		processEquipment(player, level, EquipmentSlot.OFFHAND, config.doOffhandDrop, config, random);
+		ItemStack retainedTravelersBackpack = processTravelersBackpack(player, config, random);
 		processExperience(player, level, config);
-		snapshotRetainedState(player);
+		snapshotRetainedState(player, retainedTravelersBackpack);
 	}
 
-	private static void snapshotRetainedState(ServerPlayer player) {
+	private static ItemStack processTravelersBackpack(ServerPlayer player, DeathPenaltyConfig config,
+			RandomSource random) {
+		ItemStack backpack = TravelersBackpackCompat.getEquippedBackpack(player);
+		if (backpack.isEmpty()) return ItemStack.EMPTY;
+
+		if (config.isWhitelisted(BuiltInRegistries.ITEM.getKey(backpack.getItem()))) {
+			ItemStack retained = backpack.copy();
+			TravelersBackpackCompat.detachFromDeadPlayer(player);
+			return retained;
+		}
+
+		if (config.doDurabilityLoss && !backpack.isStackable() && backpack.isDamageableItem()
+				&& random.nextDouble() < config.durabilityLossChance) {
+			applyDurabilityLoss(backpack, config, random);
+		}
+		if (backpack.isEmpty()) {
+			TravelersBackpackCompat.detachFromDeadPlayer(player);
+			return ItemStack.EMPTY;
+		}
+
+		if (random.nextDouble() < config.dropChance) {
+			// Invoke the native placement path immediately. If it reports that
+			// item fallback is required, leave the attachment intact so
+			// Traveler's Backpack's AFTER_DEATH listener can finish that native
+			// fallback. Successful placement removes the attachment itself.
+			TravelersBackpackCompat.tryNativeDeathPlacement(player, backpack);
+			return ItemStack.EMPTY;
+		}
+
+		ItemStack retained = backpack.copy();
+		// Suppress the native death action only when CDP retains the backpack.
+		// The retained stack is restored after Fabric transfers attachments.
+		TravelersBackpackCompat.detachFromDeadPlayer(player);
+		return retained;
+	}
+
+	private static void snapshotRetainedState(ServerPlayer player, ItemStack retainedTravelersBackpack) {
 		Inventory inventory = player.getInventory();
 		int nonEquipmentSlotCount = inventory.getNonEquipmentItems().size();
 		List<ItemStack> retainedInventory = new ArrayList<>(nonEquipmentSlotCount);
@@ -64,7 +105,8 @@ public final class DeathPenaltyHandler {
 			retainedEquipment,
 			player.experienceLevel,
 			progressPoints(player),
-			player.totalExperience
+			player.totalExperience,
+			retainedTravelersBackpack.copy()
 		));
 	}
 
@@ -90,19 +132,48 @@ public final class DeathPenaltyHandler {
 		player.setExperienceLevels(state.experienceLevel);
 		player.setExperiencePoints(state.experienceProgressPoints);
 		player.totalExperience = state.totalExperience;
+		if (!state.travelersBackpack.isEmpty()) {
+			// Fabric's data-attachment copyOnDeath transfer runs later, during
+			// AFTER_RESPAWN. Restoring this attachment here would be overwritten
+			// by the empty attachment that we intentionally left on the old
+			// player to suppress Traveler's Backpack's own death handler.
+			RETAINED_TRAVELERS_BACKPACKS.put(player.getUUID(), state.travelersBackpack.copy());
+		}
 	}
 
-	private static void processInventory(ServerPlayer player, Inventory inventory, int slot, boolean allowed, DeathPenaltyConfig config, RandomSource random) {
+	/**
+	 * Restores optional external attachments after Fabric has completed its
+	 * copy-on-death transfer to the new player.
+	 */
+	public static void restoreExternalSlotsAfterAttachmentTransfers(MinecraftServer server) {
+		if (RETAINED_TRAVELERS_BACKPACKS.isEmpty()) return;
+		for (Map.Entry<UUID, ItemStack> entry : List.copyOf(RETAINED_TRAVELERS_BACKPACKS.entrySet())) {
+			ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+			if (player != null) {
+				RETAINED_TRAVELERS_BACKPACKS.remove(entry.getKey());
+				TravelersBackpackCompat.restoreEquippedBackpack(player, entry.getValue());
+			}
+		}
+	}
+
+	private static void processInventory(ServerPlayer player, ServerLevel level, Inventory inventory, int slot,
+			boolean allowed, DeathPenaltyConfig config, RandomSource random) {
 		ItemStack stack = inventory.getItem(slot);
-		if (processStack(player, stack, allowed, config, random)) inventory.setItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+		if (processStack(player, level, stack, allowed, config, random)) {
+			inventory.setItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+		}
 	}
 
-	private static void processEquipment(ServerPlayer player, EquipmentSlot slot, boolean allowed, DeathPenaltyConfig config, RandomSource random) {
+	private static void processEquipment(ServerPlayer player, ServerLevel level, EquipmentSlot slot,
+			boolean allowed, DeathPenaltyConfig config, RandomSource random) {
 		ItemStack stack = player.getItemBySlot(slot);
-		if (processStack(player, stack, allowed, config, random)) player.setItemSlot(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+		if (processStack(player, level, stack, allowed, config, random)) {
+			player.setItemSlot(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+		}
 	}
 
-	private static boolean processStack(ServerPlayer player, ItemStack stack, boolean allowed, DeathPenaltyConfig config, RandomSource random) {
+	private static boolean processStack(ServerPlayer player, ServerLevel level, ItemStack stack, boolean allowed,
+			DeathPenaltyConfig config, RandomSource random) {
 		if (stack.isEmpty() || config.isWhitelisted(BuiltInRegistries.ITEM.getKey(stack.getItem()))) return false;
 
 		boolean changed = false;
@@ -122,14 +193,23 @@ public final class DeathPenaltyHandler {
 			int dropCount = roundedPercentage(stack.getCount(), randomBetween(random, config.minDropPerc, config.maxDropPerc));
 			if (config.stackInsurance) dropCount = Math.min(dropCount, Math.max(0, stack.getCount() - 1));
 			if (dropCount > 0) {
-				player.drop(stack.copyWithCount(dropCount), true, false);
-				stack.shrink(dropCount);
+				if (spawnDrop(level, player, stack.copyWithCount(dropCount), random)) stack.shrink(dropCount);
 			}
 		} else {
-			player.drop(stack.copy(), true, false);
-			stack.setCount(0);
+			if (spawnDrop(level, player, stack.copy(), random)) stack.setCount(0);
 		}
 		return true;
+	}
+
+	private static boolean spawnDrop(ServerLevel level, ServerPlayer player, ItemStack stack, RandomSource random) {
+		ItemEntity itemEntity = new ItemEntity(level, player.getX(), player.getY() + 0.5, player.getZ(), stack);
+		itemEntity.setDefaultPickUpDelay();
+		itemEntity.setDeltaMovement(
+			random.triangle(0.0, 0.11485),
+			random.triangle(0.2, 0.11485),
+			random.triangle(0.0, 0.11485)
+		);
+		return level.addFreshEntity(itemEntity);
 	}
 
 	private static boolean applyDurabilityLoss(ItemStack stack, DeathPenaltyConfig config, RandomSource random) {
@@ -181,6 +261,7 @@ public final class DeathPenaltyHandler {
 		ItemStack[] equipment,
 		int experienceLevel,
 		int experienceProgressPoints,
-		int totalExperience
+		int totalExperience,
+		ItemStack travelersBackpack
 	) { }
 }

@@ -10,6 +10,24 @@ year.month.day-sequence
 
 ## Records
 
+### 26.7.26-2
+
+- New version 1.1.0-alpha is about to be released
+
+Added optional compatibility with the native equipped-backpack slot in Traveler's Backpack 11.2.7. When that mod is installed without its external Trinkets equipment integration enabled, the worn backpack item is treated as one independent, drop-enabled slot governed by `DropChance`, the whitelist, and all other applicable CDP rules.
+
+Only the backpack item itself is processed. Items stored inside it are never enumerated or checked separately; the internal inventory remains intact as component data on the retained or dropped backpack `ItemStack`.
+
+Only when CDP retains the backpack does it temporarily remove the stack from the dead player's Traveler's Backpack attachment, suppressing the native death action. The retained backpack is restored to its dedicated slot when the player respawns.
+
+When CDP's drop check succeeds, it no longer uses the generic item-entity spawning path. It immediately calls Traveler's Backpack's native `BackpackDeathHelper.onPlayerDrops(...)` entry point. A successful placement is completed by that mod on the spot; when native item fallback is required, the attachment remains available for its `AFTER_DEATH` listener to finish the fallback. This preserves native death-site placement, forced placement, void protection, grave-mod detection, and item fallback when placement is unavailable.
+
+Fixed retained backpacks disappearing after respawn in the initial compatibility implementation. Fabric Data Attachment API performs its death-attachment transfer through `AFTER_RESPAWN`, after `restoreFrom` has returned, so the previous early restoration was overwritten by the old player's intentionally empty attachment. Backpack restoration now runs after that attachment transfer is complete.
+
+Eliminated the remaining respawn race caused by mod initialization order. Fabric attachment transfer, CDP, and Traveler's Backpack can register `AFTER_RESPAWN` callbacks in different orders. Retained backpacks are now restored at the end of the server tick, after all attachment transfers and other mods' respawn callbacks have completed.
+
+Fixed source items being removed when the world rejected creation of their dropped item entity. A source slot is now reduced or cleared only after the world successfully accepts the corresponding entity, preserving the item when spawning fails.
+
 ### 26.7.26-1
 
 Changed the default maximum experience-loss percentage from 25% to 50%. Existing worlds retain their saved value; use `/cdp set maxExperienceLossPerc 0.5` or `/cdp reset` to apply the new default.

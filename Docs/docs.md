@@ -6,6 +6,9 @@ Controllable Death Penalty replaces the all-or-nothing player-death inventory ru
 
 The vanilla `keepInventory` game rule always takes priority. When it is enabled, this mod does not drop items, remove experience, or damage equipment.
 
+## Compatible Mods
+- Traveler's Backpack
+
 ## Complete rule structure
 
 ```text
@@ -37,6 +40,8 @@ All percentage values accept values from `0.0` to `1.0`. Each minimum value must
 Every non-empty slot is handled independently. White-listed items are skipped before any random check: they never drop and never receive durability damage.
 
 The selected hotbar slot is the main-hand slot. The other eight hotbar slots are toolbar slots. The 27 ordinary inventory slots always use the normal drop rule; armor, selected main hand, off hand, and the remaining toolbar slots use their corresponding boolean setting.
+
+When Traveler's Backpack 11.2.7 is installed without its external Trinkets equipment integration enabled, the mod also intercepts Traveler's Backpack's native equipped-backpack slot. The equipped backpack is one independent, drop-enabled slot using the ordinary rules: `DropChance` determines whether its native death action runs, while adding its item ID to `WhiteList` keeps it unconditionally. A successful check is delegated to Traveler's Backpack itself, preserving that mod's death-site placement, void protection, and fallback item drop settings. Only the backpack item itself is processed. Its internal inventory is never enumerated or checked independently and remains intact as component data on the retained, placed, or dropped backpack. Trinkets, accessory slots, and external slots supplied by other mods are outside this compatibility path.
 
 For a non-stackable item with durability, the mod performs the durability check first:
 

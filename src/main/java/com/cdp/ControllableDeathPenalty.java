@@ -3,6 +3,7 @@ package com.cdp;
 import com.cdp.command.CdpCommands;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ public class ControllableDeathPenalty implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> CdpCommands.register(dispatcher));
+		ServerTickEvents.END_SERVER_TICK.register(DeathPenaltyHandler::restoreExternalSlotsAfterAttachmentTransfers);
 		LOGGER.info("Controllable Death Penalty initialized");
 	}
 
