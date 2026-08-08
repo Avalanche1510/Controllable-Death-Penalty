@@ -72,7 +72,7 @@ public final class DeathPenaltyHandler {
 			return ItemStack.EMPTY;
 		}
 
-		if (random.nextDouble() < config.dropChance) {
+		if (random.nextDouble() < config.dropChance && !config.nonStackableInsurance) {
 			// Invoke the native placement path immediately. If it reports that
 			// item fallback is required, leave the attachment intact so
 			// Traveler's Backpack's AFTER_DEATH listener can finish that native
@@ -196,6 +196,7 @@ public final class DeathPenaltyHandler {
 				if (spawnDrop(level, player, stack.copyWithCount(dropCount), random)) stack.shrink(dropCount);
 			}
 		} else {
+			if (config.nonStackableInsurance) return changed;
 			if (spawnDrop(level, player, stack.copy(), random)) stack.setCount(0);
 		}
 		return true;

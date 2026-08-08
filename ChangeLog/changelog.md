@@ -10,6 +10,24 @@ year.month.day-sequence
 
 ## Records
 
+### 26.8.9-1
+
+- New version 1.2.0-alpha is about to be released
+
+Changed `/cdp whitelist add <item>` from a permissive namespaced-identifier argument to a server item-registry argument. It now provides Tab completion for loaded vanilla and modded items like `/give`, and rejects misspelled, nonexistent, or currently unloaded item IDs during parsing instead of silently saving invalid whitelist entries.
+
+`/cdp whitelist remove <item>` now provides Tab completion from the current whitelist, allowing both loaded items and stale entries from uninstalled mods to be selected directly, while continuing to accept any syntactically valid full identifier. Added GameTest coverage for accepting registered items, rejecting unregistered items, and suggesting stale removal entries from unloaded mods.
+
+Replaced the hard-coded `/cdp` runtime feedback with localizable translation keys and added Chinese and English language resources. Clients with CDP installed see messages in their own language, while clients without CDP receive the server's Chinese fallback text so the mod remains readable when installed on the server only. This covers setting and reset results, percentage-range validation, the current-rule overview, and whitelist add, remove, and list messages; boolean states in the Chinese overview display as enabled or disabled.
+
+Added branched help commands available to all users: `/cdp help command` lists all available commands, while `/cdp help parameter <parameter>` shows the range, available values, and purpose of one parameter. Concise bilingual help text is maintained separately as language resources, avoiding both a complete-document chat dump and help content hard-coded in Java.
+
+Added `NonStackableInsurance`, enabled by default. While enabled, a non-stackable item remains in its original slot even after succeeding on `DropChance` in a drop-enabled slot. This removes the inconsistent outcome where a stack retains its final item while a single non-stackable item is removed completely. Disabling the setting restores the previous whole-item drop behaviour.
+
+This insurance controls dropping only and does not skip the independent durability-loss check. If `DurabilityInsurance` is also disabled, a non-stackable item can still be destroyed by exhausting its durability. Traveler's Backpack's native equipped-backpack slot is protected by this insurance as well; `NonStackableInsurance` must be disabled when native backpack placement on death is desired.
+
+The new field uses backward-compatible saved-data decoding. Existing worlds enable the insurance when first loaded by the new version while retaining all existing settings. Added `/cdp set nonStackableInsurance <true|false>`, `/cdp get` output, and GameTest coverage.
+
 ### 26.7.26-2
 
 - New version 1.1.0-alpha is about to be released

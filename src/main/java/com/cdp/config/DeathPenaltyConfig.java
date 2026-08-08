@@ -30,6 +30,7 @@ public final class DeathPenaltyConfig extends SavedData {
 	public boolean doOffhandDrop = false;
 	public boolean doToolbarDrop = true;
 	public boolean stackInsurance = true;
+	public boolean nonStackableInsurance = true;
 	public boolean doDurabilityLoss = true;
 	public double durabilityLossChance = 0.50;
 	public double minDurabilityLossPerc = 0.05;
@@ -45,7 +46,8 @@ public final class DeathPenaltyConfig extends SavedData {
 	private DeathPenaltyConfig(double dropChance, double minDropPerc, double maxDropPerc,
 				double minExperienceLossPerc, double maxExperienceLossPerc, boolean doArmorDrop,
 				boolean doMainhandDrop, boolean doOffhandDrop, boolean doToolbarDrop, boolean stackInsurance,
-				DurabilitySettings durability, int maxExperienceOrbs, List<Identifier> whiteList) {
+				boolean nonStackableInsurance, DurabilitySettings durability, int maxExperienceOrbs,
+				List<Identifier> whiteList) {
 		this.dropChance = dropChance;
 		this.minDropPerc = minDropPerc;
 		this.maxDropPerc = maxDropPerc;
@@ -56,6 +58,7 @@ public final class DeathPenaltyConfig extends SavedData {
 		this.doOffhandDrop = doOffhandDrop;
 		this.doToolbarDrop = doToolbarDrop;
 		this.stackInsurance = stackInsurance;
+		this.nonStackableInsurance = nonStackableInsurance;
 		this.doDurabilityLoss = durability.enabled;
 		this.durabilityLossChance = durability.chance;
 		this.minDurabilityLossPerc = durability.minLossPercentage;
@@ -89,6 +92,7 @@ public final class DeathPenaltyConfig extends SavedData {
 			Codec.BOOL.fieldOf("doOffhandDrop").forGetter(c -> c.doOffhandDrop),
 			Codec.BOOL.fieldOf("doToolbarDrop").forGetter(c -> c.doToolbarDrop),
 			Codec.BOOL.fieldOf("stackInsurance").forGetter(c -> c.stackInsurance),
+			Codec.BOOL.optionalFieldOf("nonStackableInsurance", true).forGetter(c -> c.nonStackableInsurance),
 			durabilityCodec.forGetter(c -> new DurabilitySettings(
 				c.doDurabilityLoss,
 				c.durabilityLossChance,

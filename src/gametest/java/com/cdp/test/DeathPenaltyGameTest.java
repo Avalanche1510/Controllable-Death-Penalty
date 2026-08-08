@@ -83,6 +83,7 @@ public final class DeathPenaltyGameTest {
 			DeathPenaltyConfig config, Item backpackItem) {
 		config.whiteList.clear();
 		config.dropChance = 1.0;
+		config.nonStackableInsurance = false;
 		Component droppedMarker = Component.literal("cdp-travelers-dropped-" + UUID.randomUUID());
 		ServerPlayer oldPlayer = makeMockPlayerAtTestSite(helper);
 		ItemStack droppedBackpack = new ItemStack(backpackItem);
@@ -160,14 +161,54 @@ public final class DeathPenaltyGameTest {
 		DeathPenaltyConfig defaults = new DeathPenaltyConfig();
 		helper.assertValueEqual(0.50, defaults.maxExperienceLossPerc,
 			"Default maximum experience loss percentage");
-		var whitelistParse = level.getServer().getCommands().getDispatcher().parse(
-			"cdp whitelist add othermod:test_item",
+		helper.assertTrue(defaults.nonStackableInsurance,
+			"Non-stackable item insurance must be enabled by default");
+		var validWhitelistParse = level.getServer().getCommands().getDispatcher().parse(
+			"cdp whitelist add minecraft:diamond",
 			level.getServer().createCommandSourceStack()
 		);
-		helper.assertFalse(whitelistParse.getReader().canRead(),
-			"Whitelist identifier argument did not consume the namespace colon");
-		helper.assertTrue(whitelistParse.getExceptions().isEmpty(),
-			"Whitelist identifier with a namespace produced a command parse error");
+		helper.assertFalse(validWhitelistParse.getReader().canRead(),
+			"Registered whitelist item argument did not consume the complete identifier");
+		helper.assertTrue(validWhitelistParse.getExceptions().isEmpty(),
+			"Registered whitelist item produced a command parse error");
+		var invalidWhitelistParse = level.getServer().getCommands().getDispatcher().parse(
+			"cdp whitelist add othermod:not_registered",
+			level.getServer().createCommandSourceStack()
+		);
+		helper.assertFalse(invalidWhitelistParse.getExceptions().isEmpty(),
+			"Unregistered whitelist item was accepted by the command parser");
+		DeathPenaltyConfig commandConfig = DeathPenaltyConfig.get(level.getServer());
+		Identifier staleWhitelistId = Identifier.fromNamespaceAndPath("removedmod", "old_item");
+		commandConfig.whiteList.add(staleWhitelistId);
+		var removeWhitelistParse = level.getServer().getCommands().getDispatcher().parse(
+			"cdp whitelist remove removed",
+			level.getServer().createCommandSourceStack()
+		);
+		var removeSuggestions = level.getServer().getCommands().getDispatcher()
+			.getCompletionSuggestions(removeWhitelistParse).join();
+		helper.assertTrue(removeSuggestions.getList().stream()
+			.anyMatch(suggestion -> staleWhitelistId.toString().equals(suggestion.getText())),
+			"Whitelist removal did not suggest a stale entry from an unloaded mod");
+		var commandHelpParse = level.getServer().getCommands().getDispatcher().parse(
+			"cdp help command", level.getServer().createCommandSourceStack()
+		);
+		helper.assertFalse(commandHelpParse.getReader().canRead(),
+			"Command help did not consume the complete command");
+		helper.assertTrue(commandHelpParse.getExceptions().isEmpty(),
+			"Command help did not parse");
+		var parameterHelpParse = level.getServer().getCommands().getDispatcher().parse(
+			"cdp help parameter nonStackableInsurance", level.getServer().createCommandSourceStack()
+		);
+		helper.assertFalse(parameterHelpParse.getReader().canRead(),
+			"Known parameter help did not consume the complete command");
+		helper.assertTrue(parameterHelpParse.getExceptions().isEmpty(),
+			"Known parameter help did not parse");
+		var unknownParameterHelpParse = level.getServer().getCommands().getDispatcher().parse(
+			"cdp help parameter notAParameter", level.getServer().createCommandSourceStack()
+		);
+		helper.assertTrue(unknownParameterHelpParse.getReader().canRead()
+			|| !unknownParameterHelpParse.getExceptions().isEmpty(),
+			"Unknown parameter was accepted by the help command");
 
 		DeathPenaltyConfig config = DeathPenaltyConfig.get(level.getServer());
 		config.dropChance = 1.0;
@@ -175,6 +216,7 @@ public final class DeathPenaltyGameTest {
 		config.doMainhandDrop = true;
 		config.doOffhandDrop = false;
 		config.doToolbarDrop = false;
+		config.nonStackableInsurance = false;
 		config.doDurabilityLoss = false;
 		config.minExperienceLossPerc = 0.0;
 		config.maxExperienceLossPerc = 0.0;
@@ -241,10 +283,11 @@ public final class DeathPenaltyGameTest {
 		config.durabilityInsurance = true;
 
 		List<Combination> combinations = List.of(
-			new Combination(Items.WOODEN_SWORD, 1.0, 1.0, true, true),
-			new Combination(Items.STONE_SWORD, 0.0, 0.0, false, false),
-			new Combination(Items.IRON_SWORD, 1.0, 0.0, true, false),
-			new Combination(Items.DIAMOND_SWORD, 0.0, 1.0, false, true)
+			new Combination(Items.WOODEN_SWORD, 1.0, 1.0, false, true, true),
+			new Combination(Items.STONE_SWORD, 0.0, 0.0, false, false, false),
+			new Combination(Items.IRON_SWORD, 1.0, 0.0, false, true, false),
+			new Combination(Items.DIAMOND_SWORD, 0.0, 1.0, false, false, true),
+			new Combination(Items.GOLDEN_SWORD, 1.0, 0.0, true, false, false)
 		);
 		runCombination(helper, config, combinations, 0);
 	}
@@ -259,6 +302,7 @@ public final class DeathPenaltyGameTest {
 
 		config.dropChance = combination.dropChance;
 		config.durabilityLossChance = combination.durabilityChance;
+		config.nonStackableInsurance = combination.nonStackableInsurance;
 
 		Component testMarker = Component.literal("cdp-gametest-" + UUID.randomUUID());
 		ItemStack original = new ItemStack(combination.item);
@@ -315,6 +359,7 @@ public final class DeathPenaltyGameTest {
 		Item item,
 		double dropChance,
 		double durabilityChance,
+		boolean nonStackableInsurance,
 		boolean shouldDrop,
 		boolean shouldTakeDamage
 	) { }

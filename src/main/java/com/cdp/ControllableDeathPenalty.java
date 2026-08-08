@@ -14,7 +14,7 @@ public class ControllableDeathPenalty implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> CdpCommands.register(dispatcher));
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> CdpCommands.register(dispatcher, registryAccess));
 		ServerTickEvents.END_SERVER_TICK.register(DeathPenaltyHandler::restoreExternalSlotsAfterAttachmentTransfers);
 		LOGGER.info("Controllable Death Penalty initialized");
 	}

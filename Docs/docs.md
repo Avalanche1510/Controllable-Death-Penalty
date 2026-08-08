@@ -23,6 +23,7 @@ The vanilla `keepInventory` game rule always takes priority. When it is enabled,
     DoOffhandDrop: <bool>,
     DoToolbarDrop: <bool>,
     StackInsurance: <bool>,
+    NonStackableInsurance: <bool>,
     DoDurabilityLoss: <bool>,
     DurabilityLossChance: <double>,
     MinDurabilityLossPerc: <double>,
@@ -41,7 +42,7 @@ Every non-empty slot is handled independently. White-listed items are skipped be
 
 The selected hotbar slot is the main-hand slot. The other eight hotbar slots are toolbar slots. The 27 ordinary inventory slots always use the normal drop rule; armor, selected main hand, off hand, and the remaining toolbar slots use their corresponding boolean setting.
 
-When Traveler's Backpack 11.2.7 is installed without its external Trinkets equipment integration enabled, the mod also intercepts Traveler's Backpack's native equipped-backpack slot. The equipped backpack is one independent, drop-enabled slot using the ordinary rules: `DropChance` determines whether its native death action runs, while adding its item ID to `WhiteList` keeps it unconditionally. A successful check is delegated to Traveler's Backpack itself, preserving that mod's death-site placement, void protection, and fallback item drop settings. Only the backpack item itself is processed. Its internal inventory is never enumerated or checked independently and remains intact as component data on the retained, placed, or dropped backpack. Trinkets, accessory slots, and external slots supplied by other mods are outside this compatibility path.
+When Traveler's Backpack 11.2.7 is installed without its external Trinkets equipment integration enabled, the mod also intercepts Traveler's Backpack's native equipped-backpack slot. The equipped backpack is one independent, drop-enabled non-stackable slot using the ordinary rules, so `NonStackableInsurance` retains it by default. After that insurance is disabled, `DropChance` determines whether its native death action runs. Adding its item ID to `WhiteList` also keeps it unconditionally. A successful check is delegated to Traveler's Backpack itself, preserving that mod's death-site placement, void protection, and fallback item drop settings. Only the backpack item itself is processed. Its internal inventory is never enumerated or checked independently and remains intact as component data on the retained, placed, or dropped backpack. Trinkets, accessory slots, and external slots supplied by other mods are outside this compatibility path.
 
 For a non-stackable item with durability, the mod performs the durability check first:
 
@@ -52,7 +53,7 @@ For a non-stackable item with durability, the mod performs the durability check 
 
 If the item still exists, the mod then performs the independent `DropChance` check:
 
-1. A non-stackable item in a drop-enabled slot drops as one whole item when the check succeeds.
+1. A non-stackable item in a drop-enabled slot drops as one whole item only when the check succeeds and `NonStackableInsurance` is disabled. With the insurance enabled, it remains in its slot.
 2. A stackable item in a drop-enabled slot selects a uniform random percentage between `MinDropPerc` and `MaxDropPerc`. The resulting amount is rounded up and removed from the stack.
 3. With `StackInsurance` enabled, a stack can never lose its final item. A one-item stack therefore stays in place even when its drop check succeeds.
 4. A drop-disabled slot never drops its item, regardless of the `DropChance` result. Its independent durability check still applies.
@@ -112,6 +113,12 @@ Meaning: Keep the final item in every stack that would otherwise lose all of its
 Type: bool
 Default: true
 
+NonStackableInsurance
+Meaning: Prevent a non-stackable item from being removed as a whole item by a successful drop check; protection is evaluated independently per slot
+Type: bool
+Default: true
+Note: This prevents dropping only, not independent durability loss. If DurabilityInsurance is disabled, durability loss may still destroy the item
+
 DoDurabilityLoss
 Meaning: Enable the independent durability-loss check for non-stackable durability items
 Type: bool
@@ -146,6 +153,7 @@ Meaning: Item identifiers that are exempt from item loss and durability loss
 Type: list of identifiers
 Default: empty
 Examples: minecraft:totem_of_undying, othermod:valuable_item
+Note: `whitelist add` provides completion from the server's current item registry and rejects item IDs that do not exist or are not loaded. `whitelist remove` completes entries from the current whitelist while still accepting any syntactically valid identifier, so stale entries can be removed after uninstalling a mod
 ```
 
 ## Commands
@@ -154,6 +162,7 @@ Examples: minecraft:totem_of_undying, othermod:valuable_item
 
 ```text
 /cdp get
+/cdp help
 /cdp reset
 
 /cdp set dropChance 0.5
@@ -166,6 +175,7 @@ Examples: minecraft:totem_of_undying, othermod:valuable_item
 /cdp set doOffhandDrop true
 /cdp set doToolbarDrop false
 /cdp set stackInsurance true
+/cdp set nonStackableInsurance true
 /cdp set doDurabilityLoss true
 /cdp set durabilityLossChance 0.5
 /cdp set minDurabilityLossPerc 0.05
@@ -179,3 +189,7 @@ Examples: minecraft:totem_of_undying, othermod:valuable_item
 ```
 
 The command rejects a percentage update that would make a minimum value exceed its matching maximum value. `/cdp reset` restores all defaults and clears the whitelist.
+
+`/cdp help` provides concise in-game help: `/cdp help command` lists all available commands, while `/cdp help parameter <parameter>` shows the range, available values, and purpose of one parameter. This document remains the complete reference.
+
+The item argument for `/cdp whitelist add` is connected to the server item registry. Tab completion searches all loaded vanilla and modded items, while misspelled or nonexistent IDs report an unknown-item error immediately. Tab completion for `/cdp whitelist remove` comes from the whitelist itself, including stale entries whose mods are no longer installed. Removal does not require the item to remain registered, and a full ID can still be entered manually.
