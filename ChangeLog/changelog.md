@@ -10,6 +10,16 @@ year.month.day-sequence
 
 ## Records
 
+### 26.9.22-1
+
+Migrated the Minecraft 26.2 branch to Minecraft 26.2, Fabric Loader 0.19.5, Fabric API 0.161.0+26.2, Fabric Loom 1.18, and Gradle 9.7.1 while keeping the mod version at 1.2.0-alpha.
+
+Updated the GameTest source for the Minecraft 26.2 `EntityTypes.ITEM` API and changed the GameTest mod metadata to require Minecraft 26.2. The complete Gradle build and local client startup now succeed on the new version.
+
+Verified the existing death-penalty behaviour in the Minecraft 26.2 client without identifying a blocking gameplay regression. Updated Traveler's Backpack compatibility documentation for the tested 11.3.2 release.
+
+Updated the bilingual README version references and changed its documentation and change-log links to explicit files on the `26.2` branch, so release pages do not resolve them through another default branch.
+
 ### 26.8.9-1
 
 - New version 1.2.0-alpha is about to be released

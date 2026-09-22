@@ -11,7 +11,7 @@
 	},
 	"depends": {
 		"fabricloader": ">=0.19.3",
-		"minecraft": "26.1.1",
+		"minecraft": "26.2",
 		"controllable-death-penalty": "*",
 		"fabric-gametest-api-v1": "*"
 	}

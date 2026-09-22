@@ -13,7 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
@@ -126,7 +126,7 @@ public final class DeathPenaltyGameTest {
 	}
 
 	private static List<? extends ItemEntity> findMarkedDrops(ServerLevel level, Component marker) {
-		return level.getEntities(EntityType.ITEM,
+		return level.getEntities(EntityTypes.ITEM,
 			entity -> marker.equals(entity.getItem().get(DataComponents.CUSTOM_NAME)));
 	}
 
@@ -321,7 +321,7 @@ public final class DeathPenaltyGameTest {
 		helper.runAfterDelay(5, () -> {
 			ServerPlayer respawnedPlayer = null;
 			try {
-				var droppedItems = level.getEntities(EntityType.ITEM,
+				var droppedItems = level.getEntities(EntityTypes.ITEM,
 					entity -> testMarker.equals(entity.getItem().get(DataComponents.CUSTOM_NAME)));
 				if (combination.shouldDrop) {
 					helper.assertValueEqual(1, droppedItems.size(), "Expected exactly one dropped " + combination.item);

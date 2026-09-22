@@ -32,9 +32,15 @@ bin/
 
 run/
 
+# local packwiz tooling
+
+/.tools/
+/packwiz-windows-x64.zip
+
 # java
 
 hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+/run-26.2/
